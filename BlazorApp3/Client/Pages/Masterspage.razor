@@ -1,0 +1,260 @@
+﻿@page "/masterspage"
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.WebAssembly.Authentication
+@using BlazorApp3.Shared
+@attribute [Authorize]
+@inject HttpClient Http
+@inject NavigationManager NavigationManager
+
+<div class="container">
+    <div class="row">
+        <h1 style="text-align:center;color:navy;font-weight:bold;">Blazor Crud Master Details</h1>
+        <hr />
+        <div class="col-sm-4">
+            <h2>Book Category</h2>
+            <hr />
+            <div class="form-group">
+                <label for="CategoryId" class="control-label"> CategoryId</label>
+                <input id="CategoryId" class="form-control" @bind="@mas.CategoryId" @bind:event="oninput" @onkeyup="@(()=>Get2Tables())" />
+            </div>
+            <div class="form-group">
+                <label for="CategoryName" class="control-label">Category Name</label>
+                <input id="CategoryName" class="form-control" @bind="@mas.CategoryName" />
+            </div>
+            <div class="form-group">
+                <label for="Author" class="control-label">Author</label>
+                <input id="Author" class="form-control" @bind="@mas.Author" />
+            </div>
+        </div>
+
+        <div class="col-sm-8">
+            <h2>Book Items</h2>
+            <hr />
+            <div class="form-group">
+                <label for="BookId" class="control-label">Book ID</label>
+                <input id="BookId" name="BookId" @bind="@obj.BookId" class="form-control" onkeyup="Child_Exists()" />
+                <div id="slerror" style="color:red"></div>
+            </div>
+
+            <div class="form-group">
+                <label for="BookName" class="control-label">Book Name</label>
+                <input id="BookName" @bind="@obj.BookName" class="form-control" />
+            </div>
+            <div class="form-group">
+                <label for="Description" class="control-label">Description</label>
+                <input id="Description" @bind="@obj.Description" class="form-control" />
+            </div>
+            <div class="form-group">
+                <label for="Active" class="control-label">Active</label>
+                <input id="Active" type="checkbox" @bind="@obj.Active"/>
+            </div>
+            <div class="form-group">
+                <label for="Date" class="control-label">Date</label>
+                <input id="Date" type="date" @bind="@obj.Date" class="form-control" />
+            </div>
+            <div class="form-group">
+                <label for="Price" class="control-label">Price</label>
+                <input id="Price" type="number" @bind="@obj.Price" class="form-control" />
+            </div>
+            
+            <div class="form-group" style="margin-top:25px;">
+                <label for="Image" class="control-label">Picture</label>
+                <InputFile OnChange="OnChange" id="Picture" class="btn-primary" />
+                <div class="input-group-append">
+                    <button class="btn btn-info" @onclick="@Upload" disabled="@isDisabled">Upload</button>
+                </div>
+            </div>
+            <hr />
+            <div class="form-group">
+                <input type="button" value="Add" @onclick="@Add" class="btn btn-success" />
+                <input type="button" value="Update" @onclick="@Update" class="btn btn-danger" />
+            </div>
+        </div>
+        <h2 style="text-align:center; margin-top:30px;">Book Details</h2>
+        <table id="BookItem" class="table">
+            <thead>
+                <tr><th>SlNo</th><th>Book ID</th><th>Book Name</th><th>Description</th><th>Active</th><th>Date</th><th>Price</th><th>Image</th></tr>
+            </thead>
+            <tbody>
+                @if (det is null)
+                {
+                    <p><em>Loading... !</em></p>
+                }
+                else
+                {
+                    int index = 1;
+                    @foreach (var a in det)
+                    {
+                        int sl2 = index - 1;
+                        <tr>
+                            <td>@index</td>
+                            <td>@a.BookId</td>
+                            <td>@a.BookName</td>
+                            <td>@a.Description</td>
+                            <td>@a.Active</td>
+                            <td>@a.Date</td>
+                            <td>@a.Price</td>
+                            <td><img src="/uploads/@a.Image" width="100" /></td>
+                            <td>
+                                <a class="nav-link" @onclick="@(() =>Show(@a.BookId,@a.BookName,@a.Description,@a.Active,@a.Date,a.Price,@a.Image,@sl2))">
+                                    <span class="oi oi-pencil" aria-hidden="true">@index Edit</span>
+                                </a>
+                                <a class="nav-link" @onclick="@(()=>Delete(@a.BookId))">
+                                    <span class="oi oi-trash" aria-hidden="true">Delete</span>
+                                </a>
+                            </td>
+                        </tr>
+                        index++;
+                    }
+                }
+            </tbody>
+        </table>
+
+        <div>
+         <button type="button" class="btn btn-primary" @onclick="@CreateShop">Save</button>
+        <button type="button" class="btn btn-info" @onclick="@UpdateEmployee">Update</button>
+        <button type="button" class="btn btn-danger" @onclick="@DeleteEmployee">Delete</button>
+        </div>
+
+    </div>
+
+</div>
+@code {
+
+
+    List<ImageFile> filesBase64 = new List<ImageFile>();
+    string message = "InputFile";
+    bool isDisabled = false;
+
+    async Task OnChange(InputFileChangeEventArgs e)
+    {
+        var files = e.GetMultipleFiles(); // get the files selected by the users
+        foreach (var file in files)
+        {
+            var resizedFile = await file.RequestImageFileAsync(file.ContentType, 640, 480); // resize the image file
+            var buf = new byte[resizedFile.Size]; // allocate a buffer to fill with the file's data
+            using (var stream = resizedFile.OpenReadStream())
+            {
+                await stream.ReadAsync(buf); // copy the stream to the buffer
+            }
+            filesBase64.Add(new ImageFile { base64data = Convert.ToBase64String(buf), contentType = file.ContentType, fileName = file.Name }); // convert to a base64 string!!
+            obj.Image = file.Name;
+        }
+        message = "Click UPLOAD to continue";
+    }
+
+    async Task Upload()
+    {
+        isDisabled = true;
+        using (var msg = await Http.PostAsJsonAsync<List<ImageFile>>("/api/upload", filesBase64, System.Threading.CancellationToken.None))
+        {
+            isDisabled = false;
+            if (msg.IsSuccessStatusCode)
+            {
+                message = $"{filesBase64.Count} files uploaded";
+                filesBase64.Clear();
+            }
+        }
+    }
+
+
+    List<BookItem> det = new List<BookItem>();
+    int sl = 0;
+    BookItem obj = new BookItem();
+    BookCategory mas = new BookCategory();
+    protected override async Task OnInitializedAsync()
+    {
+        string p = "ll";
+    }
+
+    protected async void CreateShop()
+    {
+
+        BCShopVM md = new BCShopVM();
+        md.BookCategory = mas;
+        md.BookItem = det;
+        await Http.PostAsJsonAsync("api/Master/AddBCShopVM", md);
+        Refresh();
+
+
+    }
+    protected async void Add()
+    {
+        det.Add(new BookItem() { BookId = obj.BookId, BookName = obj.BookName, CategoryId = mas.CategoryId, Description = obj.Description, Active = obj.Active, Date = obj.Date, Price = obj.Price, Image = obj.Image });
+        InvokeAsync(() => { StateHasChanged(); });
+
+    }
+    protected async void Update()
+    {
+        det[sl].BookId = obj.BookId;
+        det[sl].BookName = obj.BookName;
+        det[sl].Description = obj.Description;
+        det[sl].Active = obj.Active;
+        det[sl].Date = obj.Date;
+        det[sl].Price = obj.Price;
+        det[sl].Image = obj.Image;
+        InvokeAsync(() => { StateHasChanged(); });
+    }
+    protected async void Delete(string id)
+    {
+        var d = (from a in det
+                 where a.BookId == id
+                 select a).First();
+        det.Remove(d);
+        InvokeAsync(() => { StateHasChanged(); });
+    }
+    public async void Refresh()
+    {
+
+        det.Clear();
+        obj = new BookItem();
+        mas = new BookCategory();
+        InvokeAsync(() => { StateHasChanged(); });
+    }
+
+
+    protected async void UpdateEmployee()
+    {
+
+        BCShopVM md = new BCShopVM();
+        md.BookCategory = mas;
+        md.BookItem = det;
+        await Http.PutAsJsonAsync("api/Master/UpdateBCShopVM", md);
+        Refresh();
+
+
+    }
+    protected async void DeleteEmployee()
+    {
+
+        await Http.DeleteAsync("api/Master/RemoveBCShopVM/" + mas.CategoryId);
+        Refresh();
+
+    }
+    protected async void Get2Tables()
+    {
+
+        BCShopVM md = new BCShopVM();
+        md = await Http.GetFromJsonAsync<BCShopVM>("api/Master/Get/" + mas.CategoryId);
+        if (md.BookCategory != null)
+            mas = md.BookCategory;
+        if (md.BookItem.Count > 0)
+            det = md.BookItem;
+        else
+            det.Clear();
+
+    }
+    protected async void Show(string a, string b, string c, bool? d, DateTime e, int? f, string g, int sl1)
+    {
+
+        obj.BookId = a;
+        obj.BookName = b;
+        obj.Description = c;
+        obj.Active = d;
+        obj.Date = e;
+        obj.Price = f;
+        obj.Image = g;
+        sl = sl1;
+
+    }
+}
